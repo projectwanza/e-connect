@@ -1,15 +1,9 @@
-const CACHE_NAME = "emp-connect-cache-v1";
-const urlsToCache = [
-  "./",
-  "./index.html",
-  "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png"
-];
+const CACHE_NAME = "e-connect-cache-v1";
+const urlsToCache = ["./", "./index.html", "./manifest.json", "./logo.png", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache))
+    caches.open(CACHE_NAME).then((cache) => Promise.all(urlsToCache.map((u) => cache.add(u).catch(() => {}))))
   );
   self.skipWaiting();
 });
@@ -24,10 +18,14 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // NEW: page navigations (index.html) -> network first, cache only as offline fallback
-  if (event.request.mode === "navigate") {
+  const req = event.request;
+  // Never touch API calls (POST to Apps Script), Razorpay, Drive images or any other site
+  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+
+  // Page navigations: network first, cache only as offline fallback
+  if (req.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
+      fetch(req)
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put("./index.html", copy));
@@ -37,7 +35,6 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-  event.respondWith(
-    caches.match(event.request).then((response) => response || fetch(event.request))
-  );
+  // Static files (logo, icons, manifest): cache first
+  event.respondWith(caches.match(req).then((r) => r || fetch(req)));
 });
